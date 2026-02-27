@@ -43,10 +43,12 @@ Build complete character equipment sets for Diablo II: Resurrected. Uses the `d2
 3. **Fill remaining slots with uniques**:
    - `--search --quality unique --type <slot-type> --max-level <lvl>` per slot
    - Pick best-in-slot for each remaining slot
-4. **Present the full loadout** as a table:
+4. **Name the loadout** — derive a short, descriptive English name in kebab-case from the build (e.g., `cold-sorc-endgame`, `natalya-assassin`, `barb-mf`). This name becomes the output folder.
+5. **Present the full loadout** as a table:
    - Slot | Item Name | Type | Quality | Key Stats | Level Req
-5. **Confirm with user** — ask if they want adjustments
-6. **Generate all items** — use batch mode (JSON array in spec file) to generate all items in one CLI invocation. Report all output paths.
+   - Show the loadout name at the top
+6. **Confirm with user** — ask if they want adjustments (including the loadout name)
+7. **Generate all items** — use batch mode (JSON array in spec file). Set each item's `outputPath` to `$TMPDIR/d2r-items/<loadout-name>/<slot>-<item-name>.d2i` (e.g., `$TMPDIR/d2r-items/cold-sorc-endgame/helm-griffons-eye.d2i`). Report the folder path and all output paths.
 
 ## Weapon Slot Rules
 

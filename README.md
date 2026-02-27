@@ -88,6 +88,37 @@ cli/
     constants-loader.ts      D2R v99 constants initialization
 ```
 
+## Examples
+
+```
+build a Cold Sorc endgame loadout with conviction break
+```
+
+```
+build an Assassin loadout based on Natalya's set, fill remaining slots with best-in-slot uniques
+```
+
+```
+build a Barbarian MF loadout
+```
+
+```
+build an Amazon leveling loadout for level 10-20
+```
+
+```
+generate a cheated small charm with all stats at max values
+```
+
+## Tested
+
+Last tested: 2026-02-28
+
+| Component | Detail |
+|-----------|--------|
+| Diablo II: Resurrected | Patch 3.1.1 (Reign of the Warlock) |
+| [blizzhackers/d2data](https://github.com/blizzhackers/d2data) | [`a2b3f47`](https://github.com/blizzhackers/d2data/commit/a2b3f47) (2026-02-27) |
+
 ## License
 
 [MIT](LICENSE)

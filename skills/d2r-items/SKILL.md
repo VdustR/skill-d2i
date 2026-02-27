@@ -282,6 +282,8 @@ npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/inde
 
 The format can be set via `--format` flag or `"format"` field in the spec JSON (spec field takes precedence).
 
+When `outputPath` is set per item in the spec array, each item is written to that path instead of the default timestamp-based name.
+
 ---
 
 ## ItemSpec JSON Format
@@ -342,7 +344,8 @@ The format can be set via `--format` flag or `"format"` field in the spec JSON (
 
 ## Notes
 
-- Output defaults to `$TMPDIR/d2r-items/<code>-<timestamp>.d2i`
+- **Single item** output defaults to `$TMPDIR/d2r-items/<code>-<timestamp>.d2i`
+- **Loadout** output uses a named folder: `$TMPDIR/d2r-items/<loadout-name>/<slot>-<item-name>.d2i` (set via `outputPath` per spec)
 - Only D2R version 99 (latest patch)
 - For single-player / Hero Editor import only
 - For runeword items: set base item code + `runewordId` — runes, sockets, and `runewordAttributes` are auto-resolved from d2data
