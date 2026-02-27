@@ -73,6 +73,19 @@ When building a loadout, ask the user about their preferred socket strategy. The
 
 For builds that mix strategies (e.g., MF on helm + resist on shield), use manual `socketedItems` per item.
 
+## Sunder Charms (破免)
+
+Sunder Charms break monster immunity. Variants: original, Latent (internal name: PreCrafted), and Crafted.
+
+| Element | Sunder Charm |
+|---------|-------------|
+| Cold | Cold Rupture |
+| Fire | Flame Rift |
+| Lightning | Crack of the Heavens |
+| Poison | Rotting Fissure |
+| Magic | Black Cleft |
+| Physical | Bone Break |
+
 ## Tips
 
 - Consider synergy between items (e.g., +skills for the class, resistance coverage)
@@ -81,6 +94,8 @@ For builds that mix strategies (e.g., MF on helm + resist on shield), use manual
 - Charms are optional — offer to add them for extra stats
 - Unique items: Larzuk gives exactly 1 socket to unique items
 - Use `statOverrides` when auto-resolved stats need correction (e.g., Hellfire Torch class)
+- **Terminology**: when the user uses non-English gaming terms, verify the item mapping before selecting — see `d2r-items` skill "Terminology & Translation" section and `references/zh-tw-terms.md`
+- **Data freshness**: the CLI data source may not cover the latest patches — see `d2r-items` skill "Data Source & Limitations" section
 
 ## CLI Reference
 

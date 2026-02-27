@@ -14,7 +14,25 @@ description: >-
 
 Generate `.d2i` item files for Diablo II: Resurrected single-player use. Uses `@dschu012/d2s` for binary encoding (D2R version 99 / 0x63).
 
-Data source: [blizzhackers/d2data](https://github.com/blizzhackers/d2data) (D2R 3.0, cached locally via `--setup`).
+Data source: [blizzhackers/d2data](https://github.com/blizzhackers/d2data) (master branch, cached locally via `--setup`).
+
+## Data Source & Limitations
+
+- **Source**: master branch tarball from [blizzhackers/d2data](https://github.com/blizzhackers/d2data)
+- **Coverage**: depends on when the repo was last updated — check the commit history for the actual D2R patch version
+- **Check freshness**: `gh api "repos/blizzhackers/d2data/commits?per_page=3&path=json/uniqueitems.json" --jq '.[] | "\(.commit.committer.date) | \(.commit.message)"'`
+- **Local cache metadata**: `~/.cache/game-d2i-skills/d2data/_meta.json` records `fetchedAt` timestamp
+- **Display name mismatch**: some items have different internal names (`index` field) vs in-game display names (from `allstrings-eng.json`). For example, "Latent Cold Rupture" is stored as "PreCrafted Cold Rupture". When a lookup returns no results, the item may exist under a different internal name — check `allstrings-eng.json` or search the web to find the mapping.
+- **Refresh**: run `--update-data` to re-download from the repo
+
+## Terminology & Translation
+
+When the user uses non-English item names, slang, or abbreviations, **do not assume the mapping** — verify first:
+
+1. **Search or lookup** the translated term in the CLI to confirm it exists
+2. If no match, **check the reference files** (e.g., `references/zh-tw-terms.md` for Traditional Chinese)
+3. If still no match, **search the web** for the community term to identify the correct item
+4. If still ambiguous, **ask the user** to clarify before proceeding
 
 ## First-Time Setup
 
@@ -72,7 +90,7 @@ Always inform the user which class before generating.
 ```json
 {"itemCode":"rin","quality":"unique","level":85,"uniqueId":400,"stats":[],"statOverrides":{"83":[4,3]}}
 ```
-This auto-resolves all Hellfire Torch stats, then overrides stat 83 (`item_addclassskills`) to `[4, 3]` (Barbarian +3).
+This auto-resolves all Hellfire Torch stats, then overrides stat 83 (`item_addclassskills`) to `[4, 3]` → `[classId=4 (Barbarian), value=3 (+3 skills)]`.
 
 **Runeword auto-resolve**: when `runewordId` is set, the CLI also auto-resolves:
 - **socketedItems** — the correct runes in order (e.g., Jah-Ith-Ber for Enigma)
