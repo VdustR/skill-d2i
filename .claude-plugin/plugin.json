@@ -1,0 +1,15 @@
+{
+  "name": "game-d2i-skills",
+  "version": "0.1.0",
+  "description": "Generate D2R .d2i item files via natural language",
+  "author": {
+    "name": "VdustR",
+    "url": "https://github.com/VdustR"
+  },
+  "homepage": "https://github.com/VdustR/game-d2i-skills",
+  "repository": "https://github.com/VdustR/game-d2i-skills",
+  "license": "MIT",
+  "keywords": ["diablo2", "d2r", "d2i", "items", "hero-editor"],
+  "skills": "./skills/",
+  "commands": "./commands/"
+}
