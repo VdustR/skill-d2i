@@ -1,6 +1,8 @@
-# game-d2i-skills
+# skill-d2i
 
 Claude Code plugin for generating Diablo II: Resurrected `.d2i` item files from natural language.
+
+> Plugin name in `plugin.json` is `game-d2i-skills`.
 
 ## Features
 
@@ -12,22 +14,16 @@ Claude Code plugin for generating Diablo II: Resurrected `.d2i` item files from 
 
 ## Install
 
-### Via [skills](https://skills.sh/)
-
 ```bash
-npx -y skills add VdustR/game-d2i-skills -g
+git clone https://github.com/VdustR/skill-d2i.git
+claude --plugin-dir ./skill-d2i
 ```
 
-### Via git clone
-
-```bash
-git clone https://github.com/VdustR/game-d2i-skills.git
-claude --plugin-dir ./game-d2i-skills
-```
+> **Note:** This plugin requires `--plugin-dir` (not `skills add`) because the skills depend on the bundled CLI via `${CLAUDE_PLUGIN_ROOT}`.
 
 ## Setup
 
-First-time setup downloads ~2MB of game data from [d2data](https://github.com/blizzhackers/d2data):
+First-time setup downloads ~2 MB of game data from [d2data](https://github.com/blizzhackers/d2data). Required before generating items that use auto-resolved stats (unique/set):
 
 ```
 /d2i setup
@@ -39,6 +35,8 @@ First-time setup downloads ~2MB of game data from [d2data](https://github.com/bl
 |------|--------|-------------|
 | [D2RuneWizard Hero Editor](https://d2runewizard.com/hero-editor) | `raw` | Raw item bytes (no container header) |
 | Other / General | `d2` | Standard D2I: `JM` header + uint16 count + item bytes |
+
+Select via `--format raw` on the CLI, or `"format": "raw"` in the ItemSpec JSON (spec field takes precedence).
 
 ## CLI
 
@@ -62,6 +60,9 @@ npx tsx src/index.ts --search --class amazon --quality set
 # Preview auto-resolved stats
 npx tsx src/index.ts --resolve-stats --quality unique --id 266
 
+# Read / inspect a .d2i file
+npx tsx src/index.ts --read examples/cheats/god-charm.d2i
+
 # Generate .d2i from spec
 npx tsx src/index.ts --file spec.json
 npx tsx src/index.ts --file spec.json --format raw
@@ -72,10 +73,13 @@ npx tsx src/index.ts --file spec.json --format raw
 ```
 .claude-plugin/plugin.json   Plugin manifest
 commands/d2i.md              /d2i slash command
-skills/d2r-items/
-  SKILL.md                   Core skill (workflows, CLI reference, ItemSpec format)
-  references/
-    common-stats.md          Frequently used stat IDs and value formats
+skills/
+  d2r-items/                 Single item generation, search, magic items
+    SKILL.md                 Workflows, CLI reference, ItemSpec format
+    references/
+      common-stats.md        Frequently used stat IDs and value formats
+  d2r-loadout/               Full character loadout builder
+  d2r-read/                  Read / inspect .d2i files
 examples/                    Sample .d2i files
 cli/
   src/
@@ -90,29 +94,34 @@ cli/
 
 ## Examples
 
+Pass these as arguments to `/d2i`:
+
 ```
-build a Cold Sorc endgame loadout with conviction break
+/d2i build a Cold Sorc endgame loadout with conviction break
 ```
 
 ```
-build an Assassin loadout based on Natalya's set, fill remaining slots with best-in-slot uniques
+/d2i build an Assassin loadout based on Natalya's set, fill remaining slots with best-in-slot uniques
 ```
 
 ```
-build a Barbarian MF loadout
+/d2i build a Barbarian MF loadout
 ```
 
 ```
-build an Amazon leveling loadout for level 10-20
+/d2i build an Amazon leveling loadout for level 10-20
 ```
 
 ```
-generate a cheated small charm with all stats at max values
+/d2i generate a cheated small charm with all stats at max values
 ```
 
 ## Known Issues
 
-- **D2RuneWizard Hero Editor** displays incorrect "Required Level" for magic items due to affix data indexing bugs in its JavaScript. The generated `.d2i` files are correct — verify with `--read` (shows `requiredLevel` from d2data) or in-game.
+- **D2RuneWizard Hero Editor** displays incorrect "Required Level" for magic items due to affix data indexing bugs in its JavaScript. The generated `.d2i` files are correct — verify with `--read` or in-game:
+  ```bash
+  npx tsx cli/src/index.ts --read path/to/item.d2i
+  ```
 
 ## Tested
 

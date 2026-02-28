@@ -6,8 +6,8 @@
     "name": "VdustR",
     "url": "https://github.com/VdustR"
   },
-  "homepage": "https://github.com/VdustR/game-d2i-skills",
-  "repository": "https://github.com/VdustR/game-d2i-skills",
+  "homepage": "https://github.com/VdustR/skill-d2i",
+  "repository": "https://github.com/VdustR/skill-d2i",
   "license": "MIT",
   "keywords": ["diablo2", "d2r", "d2i", "items", "hero-editor"],
   "skills": "./skills/",
