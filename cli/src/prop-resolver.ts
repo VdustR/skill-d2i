@@ -9,6 +9,8 @@ export interface ResolvedStat {
 export interface ResolvedItemInfo {
   stats: ResolvedStat[];
   sockets: number;
+  ethereal: boolean;
+  indestructible: boolean;
 }
 
 export interface ResolvedRuneword {
@@ -95,11 +97,13 @@ export function resolveItem(
   const propMap = buildPropMap();
 
   const found = findItemEntry(quality, itemId);
-  if (!found) return { stats: [], sockets: 0 };
+  if (!found) return { stats: [], sockets: 0, ethereal: false, indestructible: false };
 
   const { entry: itemEntry, maxProps } = found;
   const stats: ResolvedStat[] = [];
   let sockets = 0;
+  let ethereal = false;
+  let indestructible = false;
 
   for (let i = 1; i <= maxProps; i++) {
     const propCode: string | undefined = itemEntry[`prop${i}`];
@@ -118,6 +122,16 @@ export function resolveItem(
       continue;
     }
 
+    // Handle structural flags (no stat, just item flags)
+    if (propCode === "indestruct") {
+      indestructible = true;
+      continue;
+    }
+    if (propCode === "ethereal") {
+      ethereal = true;
+      continue;
+    }
+
     const par = itemEntry[`par${i}`];
     const min = parseInt(itemEntry[`min${i}`]) || 0;
     const max = parseInt(itemEntry[`max${i}`]) || 0;
@@ -129,7 +143,7 @@ export function resolveItem(
     stats.push(...resolved);
   }
 
-  return { stats, sockets };
+  return { stats, sockets, ethereal, indestructible };
 }
 
 function resolveProperty(
@@ -252,6 +266,26 @@ function resolveProperty(
       }
 
       case 12: { // Random skill (skill-rand) — not resolvable, skip
+        break;
+      }
+
+      case 13: { // Durability percent (dur%)
+        if (statId == null) break;
+        results.push({ id: statId, values: [max] });
+        break;
+      }
+
+      case 21: { // Class skills (pal, sor, nec, bar, ama, dru, ass, war) or element skills (fireskill)
+        if (statId == null) break;
+        const classOrElemId = parseInt(val) || 0;
+        results.push({ id: statId, values: [classOrElemId, max] });
+        break;
+      }
+
+      case 24: { // Monster-type stats (att-mon%, dmg-mon%, reanimate, state)
+        if (statId == null) break;
+        const monParam = parseInt(par) || 0;
+        results.push({ id: statId, values: [monParam, max] });
         break;
       }
 

@@ -140,7 +140,11 @@ If the user has specific requirements, use manual `socketedItems` instead. Each 
 
 Magic items need a prefix ID, suffix ID, or both. Use the magic affix search to find the right IDs.
 
-**Lowest required level for cheat / IMPOSSIBLE magic items**: required level is calculated from affix `level` (qlvl) and `levelreq` fields. When the user requests the lowest possible level requirement, ask if they want to set `magicPrefix: 0` and `magicSuffix: 0` (no affix) — this gives required level 1, but the item will have no prefix/suffix name. If they prefer a named item, pick the lowest-qlvl affix available for that base type.
+**Required level**: the game calculates `reqLvl = max(base_item_levelreq, prefix_levelreq, suffix_levelreq)` using d2data's `levelreq` field. Use the CLI's `--read` command to verify the calculated `requiredLevel` from d2data — this matches the actual game value.
+
+**D2RuneWizard Hero Editor reqLvl bug**: the hero editor displays **incorrect** required levels for magic items due to two bugs in its JavaScript: (1) its prefix data array uses different indexing than the game binary, and (2) it uses the prefix data array for suffix lookups too. **Ignore the hero editor's "Required Level" for magic items** — verify with `--read` or in-game instead.
+
+**Choosing affixes for level-restricted builds**: when the user specifies a level range (e.g., "level 10-20"), select affixes whose `levelreq` fits within that range. Use `--max-level` in search to filter. Prefer using proper affix IDs over `magicPrefix: 0, magicSuffix: 0` so items display correct names (e.g., "Bronze Small Charm of Life" instead of just "Small Charm"). Only use `0, 0` when the level budget is extremely tight (reqLvl must be 1) or the user explicitly requests no affix names.
 
 **Steps:**
 
@@ -351,5 +355,5 @@ When `outputPath` is set per item in the spec array, each item is written to tha
 - For runeword items: set base item code + `runewordId` — runes, sockets, and `runewordAttributes` are auto-resolved from d2data
 - Unique items: Larzuk gives exactly 1 socket to unique items
 - Reference: `references/common-stats.md` for stat IDs and value formats
-- **Magic item required level**: determined by affix `level` (qlvl) and `levelreq` fields — the game uses both, not just `levelreq`. Setting `magicPrefix: 0` / `magicSuffix: 0` avoids any affix-based level requirement
+- **Magic item required level**: `reqLvl = max(base_levelreq, prefix_levelreq, suffix_levelreq)` using d2data `levelreq` fields. The `--read` command calculates this automatically. Note: D2RuneWizard Hero Editor shows incorrect reqLvl for magic items (see Workflow 3 notes)
 - **Stat bit field limits**: each stat has a max value determined by its save bits (sB) and save-add (sA). Exceeding the limit causes **wrap-around** (overflow), not corruption — the value silently wraps to the opposite extreme (e.g., +224 Str → -32 Str). See `references/common-stats.md` for per-stat ranges

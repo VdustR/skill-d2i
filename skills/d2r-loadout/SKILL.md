@@ -49,6 +49,7 @@ Build complete character equipment sets for Diablo II: Resurrected. Uses the `d2
    - Show the loadout name at the top
 6. **Confirm with user** — ask if they want adjustments (including the loadout name)
 7. **Generate all items** — use batch mode (JSON array in spec file). Set each item's `outputPath` to `$TMPDIR/d2r-items/<loadout-name>/<slot>-<item-name>.d2i` (e.g., `$TMPDIR/d2r-items/cold-sorc-endgame/helm-griffons-eye.d2i`). Report the folder path and all output paths.
+8. **Verify required levels** — for level-restricted loadouts, run `--read` on the generated charm `.d2i` files to confirm `requiredLevel` fits the target range. Do **not** rely on D2RuneWizard Hero Editor's "Required Level" display for magic items (it has a known bug). Use proper affix IDs (`magicPrefix`/`magicSuffix`) with `levelreq` within the target range rather than defaulting to `0, 0`.
 
 ## Weapon Slot Rules
 

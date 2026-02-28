@@ -50,6 +50,11 @@ The output is JSON with these fields per item:
 | `uniqueId` | Unique item ID (quality=7 only) |
 | `setId` | Set item ID (quality=5 only) |
 | `runewordId` | Runeword ID (runeword items only) |
+| `magicPrefix` | Magic prefix game ID (quality=4 only) |
+| `magicPrefixName` | Magic prefix name from d2s constants |
+| `magicSuffix` | Magic suffix game ID (quality=4 only) |
+| `magicSuffixName` | Magic suffix name from d2s constants |
+| `requiredLevel` | Calculated required level from d2data (requires `--setup`) |
 | `magicAttributes[]` | Item stats: `{id, name, values}` |
 | `runewordAttributes[]` | Runeword bonus stats (runeword items only) |
 | `socketedItems[]` | Socketed items: `{type, simple, quality, attributes[]}` |
@@ -83,3 +88,5 @@ npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/inde
 - Only supports D2R v99 format (version string `"101"`); older D2 Classic or LoD formats may fail
 - Stat names come from `@dschu012/d2s` constants data — some may show empty names if not mapped
 - Does not resolve human-readable item or unique names (outputs codes and IDs)
+- `requiredLevel` is calculated from d2data (`--setup` required); without d2data cache, the field is omitted
+- `requiredLevel` matches the actual in-game required level; D2RuneWizard Hero Editor displays incorrect values for magic items

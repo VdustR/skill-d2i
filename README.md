@@ -110,6 +110,10 @@ build an Amazon leveling loadout for level 10-20
 generate a cheated small charm with all stats at max values
 ```
 
+## Known Issues
+
+- **D2RuneWizard Hero Editor** displays incorrect "Required Level" for magic items due to affix data indexing bugs in its JavaScript. The generated `.d2i` files are correct — verify with `--read` (shows `requiredLevel` from d2data) or in-game.
+
 ## Tested
 
 Last tested: 2026-02-28

@@ -220,6 +220,13 @@ async function generateOne(
       if (spec.sockets == null && resolved.sockets > 0) {
         spec.sockets = resolved.sockets;
       }
+      if (resolved.indestructible) {
+        spec.maxDurability = 0;
+        spec.currentDurability = 0;
+      }
+      if (resolved.ethereal && spec.ethereal == null) {
+        spec.ethereal = true;
+      }
     }
 
     // Auto-resolve runeword composition and stats
@@ -281,6 +288,110 @@ async function generateOne(
   return { outputPath, fileSize: d2iBytes.length, format: finalFormat };
 }
 
+// Cached lookup maps — built once on first use, O(1) per lookup after that.
+let reqLvlMaps: {
+  baseByCode: Map<string, number>;       // item code → base levelreq
+  uniqueById: Map<number, number>;       // unique *ID → lvl req
+  setById: Map<number, number>;          // set *ID → lvl req
+  pfxByGameId: Map<number, number>;      // prefix game ID → levelreq
+  sfxByGameId: Map<number, number>;      // suffix game ID → levelreq
+  pfxNameByGameId: Map<number, string>;  // prefix game ID → Name
+  sfxNameByGameId: Map<number, string>;  // suffix game ID → Name
+} | null = null;
+
+function buildReqLvlMaps(): typeof reqLvlMaps {
+  if (reqLvlMaps) return reqLvlMaps;
+  if (!isCached()) return null;
+
+  const baseByCode = new Map<string, number>();
+  for (const file of ["misc.json", "armor.json", "weapons.json"] as const) {
+    const data = loadData(file);
+    for (const entry of Object.values(data) as any[]) {
+      if (entry?.code && !baseByCode.has(entry.code)) {
+        baseByCode.set(entry.code, parseInt(entry.levelreq) || 0);
+      }
+    }
+  }
+
+  const uniqueById = new Map<number, number>();
+  for (const entry of Object.values(loadData("uniqueitems.json")) as any[]) {
+    if (entry?.["*ID"] != null) {
+      uniqueById.set(Number(entry["*ID"]), parseInt(entry["lvl req"]) || 0);
+    }
+  }
+
+  const setById = new Map<number, number>();
+  for (const entry of Object.values(loadData("setitems.json")) as any[]) {
+    if (entry?.["*ID"] != null) {
+      setById.set(Number(entry["*ID"]), parseInt(entry["lvl req"]) || 0);
+    }
+  }
+
+  function buildAffixMaps(file: "magicprefix.json" | "magicsuffix.json") {
+    const data = loadData(file);
+    const keys = Object.keys(data).map(Number).sort((a, b) => a - b);
+    let gapKey = Infinity;
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (keys[i + 1] - keys[i] > 1) { gapKey = keys[i] + 1; break; }
+    }
+    const lvlMap = new Map<number, number>();
+    const nameMap = new Map<number, string>();
+    for (const [k, entry] of Object.entries(data) as [string, any][]) {
+      if (!entry) continue;
+      const d2key = parseInt(k);
+      const gameId = d2key < gapKey ? d2key + 1 : d2key;
+      lvlMap.set(gameId, parseInt(entry.levelreq) || 0);
+      if (entry.Name) nameMap.set(gameId, entry.Name);
+    }
+    return { lvlMap, nameMap };
+  }
+
+  const pfx = buildAffixMaps("magicprefix.json");
+  const sfx = buildAffixMaps("magicsuffix.json");
+
+  reqLvlMaps = {
+    baseByCode,
+    uniqueById,
+    setById,
+    pfxByGameId: pfx.lvlMap,
+    sfxByGameId: sfx.lvlMap,
+    pfxNameByGameId: pfx.nameMap,
+    sfxNameByGameId: sfx.nameMap,
+  };
+  return reqLvlMaps;
+}
+
+function calcRequiredLevel(item: any): number | undefined {
+  const maps = buildReqLvlMaps();
+  if (!maps) return undefined;
+
+  let reqLvl = 0;
+
+  // Base item levelreq
+  const code = item.type?.trim();
+  if (code) reqLvl = Math.max(reqLvl, maps.baseByCode.get(code) ?? 0);
+
+  // Unique item levelreq
+  if (item.quality === 7 && item.unique_id != null) {
+    reqLvl = Math.max(reqLvl, maps.uniqueById.get(item.unique_id) ?? 0);
+  }
+
+  // Set item levelreq
+  if (item.quality === 5 && item.set_id != null) {
+    reqLvl = Math.max(reqLvl, maps.setById.get(item.set_id) ?? 0);
+  }
+
+  // Magic prefix/suffix levelreq
+  if (item.quality === 4) {
+    const pfxId = (item as any).magic_prefix || 0;
+    const sfxId = (item as any).magic_suffix || 0;
+    if (pfxId > 0) reqLvl = Math.max(reqLvl, maps.pfxByGameId.get(pfxId) ?? 0);
+    if (sfxId > 0) reqLvl = Math.max(reqLvl, maps.sfxByGameId.get(sfxId) ?? 0);
+  }
+
+  return reqLvl > 0 ? reqLvl : undefined;
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0];
@@ -335,6 +446,8 @@ async function main() {
           success: true, quality, id: itemId,
           count: resolved.stats.length, stats: resolved.stats,
           sockets: resolved.sockets,
+          ...(resolved.ethereal ? { ethereal: true } : {}),
+          ...(resolved.indestructible ? { indestructible: true } : {}),
         }) + "\n"
       );
       return;
@@ -387,38 +500,59 @@ async function main() {
           items = await readItems(reader99, D2R_VERSION, patchedConstants, { extendedStash: false });
         }
 
-        const result = items.map((item) => ({
-          type: item.type?.trim(),
-          typeName: item.type_name || undefined,
-          quality: item.quality,
-          level: item.level,
-          version: item.version,
-          identified: !!item.identified,
-          ethereal: !!item.ethereal,
-          socketed: !!item.socketed,
-          runeword: !!item.given_runeword,
-          defense: item.defense_rating,
-          maxDurability: item.max_durability,
-          currentDurability: item.current_durability,
-          quantity: item.quantity || undefined,
-          totalSockets: item.total_nr_of_sockets,
-          filledSockets: item.nr_of_items_in_sockets,
-          uniqueId: item.quality === 7 ? item.unique_id : undefined,
-          setId: item.quality === 5 ? item.set_id : undefined,
-          runewordId: item.given_runeword ? item.runeword_id : undefined,
-          magicAttributes: item.magic_attributes?.map((a) => ({
+        const result = items.map((item) => {
+          const base: Record<string, unknown> = {
+            type: item.type?.trim(),
+            typeName: item.type_name || undefined,
+            quality: item.quality,
+            level: item.level,
+            version: item.version,
+            identified: !!item.identified,
+            ethereal: !!item.ethereal,
+            socketed: !!item.socketed,
+            runeword: !!item.given_runeword,
+            defense: item.defense_rating,
+            maxDurability: item.max_durability,
+            currentDurability: item.current_durability,
+            quantity: item.quantity || undefined,
+            totalSockets: item.total_nr_of_sockets,
+            filledSockets: item.nr_of_items_in_sockets,
+          };
+
+          // Quality-specific fields
+          if (item.quality === 7) base.uniqueId = item.unique_id;
+          if (item.quality === 5) base.setId = item.set_id;
+          if (item.given_runeword) base.runewordId = item.runeword_id;
+          if (item.quality === 4) {
+            const pfxId = (item as any).magic_prefix || 0;
+            const sfxId = (item as any).magic_suffix || 0;
+            base.magicPrefix = pfxId;
+            base.magicSuffix = sfxId;
+            // Resolve names: d2s constants first, d2data cache as fallback
+            const maps = buildReqLvlMaps();
+            const pfxName = (item as any).magic_prefix_name || (maps && pfxId ? maps.pfxNameByGameId.get(pfxId) : undefined);
+            const sfxName = (item as any).magic_suffix_name || (maps && sfxId ? maps.sfxNameByGameId.get(sfxId) : undefined);
+            if (pfxName) base.magicPrefixName = pfxName;
+            if (sfxName) base.magicSuffixName = sfxName;
+          }
+
+          // Calculate required level from d2data (if cached)
+          const reqLvl = calcRequiredLevel(item);
+          if (reqLvl !== undefined) base.requiredLevel = reqLvl;
+
+          base.magicAttributes = item.magic_attributes?.map((a) => ({
             id: a.id,
             name: a.name,
             values: a.values,
-          })) ?? [],
-          runewordAttributes: item.given_runeword
+          })) ?? [];
+          base.runewordAttributes = item.given_runeword
             ? item.runeword_attributes?.map((a) => ({
                 id: a.id,
                 name: a.name,
                 values: a.values,
               })) ?? []
-            : undefined,
-          socketedItems: item.socketed_items?.map((s) => ({
+            : undefined;
+          base.socketedItems = item.socketed_items?.map((s) => ({
             type: s.type?.trim(),
             simple: !!s.simple_item,
             quality: s.quality,
@@ -427,8 +561,10 @@ async function main() {
               name: a.name,
               values: a.values,
             })) ?? [],
-          })) ?? [],
-        }));
+          })) ?? [];
+
+          return base;
+        });
 
         process.stdout.write(
           JSON.stringify({
