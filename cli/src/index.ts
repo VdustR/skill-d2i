@@ -389,6 +389,14 @@ function calcRequiredLevel(item: any): number | undefined {
     if (sfxId > 0) reqLvl = Math.max(reqLvl, maps.sfxByGameId.get(sfxId) ?? 0);
   }
 
+  // Socketed items levelreq
+  if (item.socketed_items?.length) {
+    for (const s of item.socketed_items) {
+      const sCode = s.type?.trim();
+      if (sCode) reqLvl = Math.max(reqLvl, maps.baseByCode.get(sCode) ?? 0);
+    }
+  }
+
   return reqLvl > 0 ? reqLvl : undefined;
 }
 
@@ -552,16 +560,22 @@ async function main() {
                 values: a.values,
               })) ?? []
             : undefined;
-          base.socketedItems = item.socketed_items?.map((s) => ({
-            type: s.type?.trim(),
-            simple: !!s.simple_item,
-            quality: s.quality,
-            attributes: s.magic_attributes?.map((a) => ({
-              id: a.id,
-              name: a.name,
-              values: a.values,
-            })) ?? [],
-          })) ?? [];
+          base.socketedItems = item.socketed_items?.map((s) => {
+            try {
+              return {
+                type: s.type?.trim(),
+                simple: !!s.simple_item,
+                quality: s.quality,
+                attributes: s.magic_attributes?.map((a) => ({
+                  id: a.id,
+                  name: a.name,
+                  values: a.values,
+                })) ?? [],
+              };
+            } catch {
+              return { type: s.type?.trim() ?? "???", simple: true, quality: s.quality ?? 0, attributes: [] };
+            }
+          }) ?? [];
 
           return base;
         });
