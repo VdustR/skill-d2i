@@ -291,6 +291,8 @@ async function generateOne(
 // Cached lookup maps — built once on first use, O(1) per lookup after that.
 let reqLvlMaps: {
   baseByCode: Map<string, number>;       // item code → base levelreq
+  reqStrByCode: Map<string, number>;     // item code → reqstr
+  reqDexByCode: Map<string, number>;     // item code → reqdex
   uniqueById: Map<number, number>;       // unique *ID → lvl req
   setById: Map<number, number>;          // set *ID → lvl req
   pfxByGameId: Map<number, number>;      // prefix game ID → levelreq
@@ -304,11 +306,15 @@ function buildReqLvlMaps(): typeof reqLvlMaps {
   if (!isCached()) return null;
 
   const baseByCode = new Map<string, number>();
+  const reqStrByCode = new Map<string, number>();
+  const reqDexByCode = new Map<string, number>();
   for (const file of ["misc.json", "armor.json", "weapons.json"] as const) {
     const data = loadData(file);
     for (const entry of Object.values(data) as any[]) {
       if (entry?.code && !baseByCode.has(entry.code)) {
         baseByCode.set(entry.code, parseInt(entry.levelreq) || 0);
+        reqStrByCode.set(entry.code, parseInt(entry.reqstr) || 0);
+        reqDexByCode.set(entry.code, parseInt(entry.reqdex) || 0);
       }
     }
   }
@@ -351,6 +357,8 @@ function buildReqLvlMaps(): typeof reqLvlMaps {
 
   reqLvlMaps = {
     baseByCode,
+    reqStrByCode,
+    reqDexByCode,
     uniqueById,
     setById,
     pfxByGameId: pfx.lvlMap,
@@ -398,6 +406,30 @@ function calcRequiredLevel(item: any): number | undefined {
   }
 
   return reqLvl > 0 ? reqLvl : undefined;
+}
+
+function calcRequiredStr(item: any): number | undefined {
+  const maps = buildReqLvlMaps();
+  if (!maps) return undefined;
+  const code = item.type?.trim();
+  if (!code) return undefined;
+  const base = maps.reqStrByCode.get(code);
+  if (!base || base <= 0) return undefined;
+  const reduction = item.ethereal ? 10 : 0;
+  const result = Math.max(0, base - reduction);
+  return result > 0 ? result : undefined;
+}
+
+function calcRequiredDex(item: any): number | undefined {
+  const maps = buildReqLvlMaps();
+  if (!maps) return undefined;
+  const code = item.type?.trim();
+  if (!code) return undefined;
+  const base = maps.reqDexByCode.get(code);
+  if (!base || base <= 0) return undefined;
+  const reduction = item.ethereal ? 10 : 0;
+  const result = Math.max(0, base - reduction);
+  return result > 0 ? result : undefined;
 }
 
 async function main() {
@@ -547,6 +579,11 @@ async function main() {
           // Calculate required level from d2data (if cached)
           const reqLvl = calcRequiredLevel(item);
           if (reqLvl !== undefined) base.requiredLevel = reqLvl;
+
+          const reqStr = calcRequiredStr(item);
+          const reqDex = calcRequiredDex(item);
+          if (reqStr !== undefined) base.requiredStr = reqStr;
+          if (reqDex !== undefined) base.requiredDex = reqDex;
 
           base.magicAttributes = item.magic_attributes?.map((a) => ({
             id: a.id,

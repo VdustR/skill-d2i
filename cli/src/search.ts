@@ -1,4 +1,4 @@
-import { loadData, DataFileName } from "./data-fetcher";
+import { loadData, DataFileName, isCached } from "./data-fetcher";
 import type { IConstantData } from "@dschu012/d2s/lib/d2/types";
 
 export interface SearchFilters {
@@ -18,12 +18,34 @@ export interface SearchResult {
   category: "unique" | "set" | "runeword" | "base" | "magic-prefix" | "magic-suffix";
   baseName?: string;
   levelReq?: number;
+  strReq?: number;
+  dexReq?: number;
   props?: string[];
   modCode?: string;
   modMin?: number;
   modMax?: number;
   itemTypes?: string[];
   classSpecific?: string;
+}
+
+let baseReqCache: Map<string, { strReq: number; dexReq: number }> | null = null;
+
+function getBaseReqMap(): Map<string, { strReq: number; dexReq: number }> {
+  if (baseReqCache) return baseReqCache;
+  baseReqCache = new Map();
+  if (!isCached()) return baseReqCache;
+  for (const file of ["armor.json", "weapons.json"] as const) {
+    const data = loadData(file);
+    for (const entry of Object.values(data) as any[]) {
+      if (entry?.code) {
+        baseReqCache.set(entry.code.trim(), {
+          strReq: parseInt(entry.reqstr) || 0,
+          dexReq: parseInt(entry.reqdex) || 0,
+        });
+      }
+    }
+  }
+  return baseReqCache;
 }
 
 function matchesClass(categories: string[] | undefined, className: string): boolean {
@@ -106,7 +128,8 @@ export function search(filters: SearchFilters, constants: IConstantData): Search
       if (filters.class && !matchesClass(cats, filters.class)) continue;
       if (filters.type && !matchesType(cats, filters.type)) continue;
 
-      results.push({
+      const reqs = getBaseReqMap().get(code.trim());
+      const result: SearchResult = {
         name,
         code,
         id: parseInt(id),
@@ -114,7 +137,10 @@ export function search(filters: SearchFilters, constants: IConstantData): Search
         baseName: entry["*ItemName"] || "",
         levelReq: lvlReq,
         props: extractProps(entry),
-      });
+      };
+      if (reqs?.strReq) result.strReq = reqs.strReq;
+      if (reqs?.dexReq) result.dexReq = reqs.dexReq;
+      results.push(result);
       if (results.length >= limit) break;
     }
   }
@@ -167,7 +193,8 @@ export function search(filters: SearchFilters, constants: IConstantData): Search
       if (filters.class && !matchesClass(cats, filters.class) && !setMatchesClass(parentSet, filters.class)) continue;
       if (filters.type && !matchesType(cats, filters.type)) continue;
 
-      results.push({
+      const setReqs = getBaseReqMap().get(code.trim());
+      const setResult: SearchResult = {
         name,
         code,
         id: setItemId,
@@ -175,7 +202,10 @@ export function search(filters: SearchFilters, constants: IConstantData): Search
         baseName: entry["*ItemName"] || "",
         levelReq: lvlReq,
         props: extractProps(entry),
-      });
+      };
+      if (setReqs?.strReq) setResult.strReq = setReqs.strReq;
+      if (setReqs?.dexReq) setResult.dexReq = setReqs.dexReq;
+      results.push(setResult);
       if (results.length >= limit) break;
     }
   }
@@ -320,13 +350,18 @@ export function search(filters: SearchFilters, constants: IConstantData): Search
         if (filters.class && !matchesClass(cats, filters.class)) continue;
         if (filters.type && !matchesType(cats, filters.type)) continue;
 
-        results.push({
+        const baseResult: SearchResult = {
           name,
           code,
           id: 0,
           category: "base",
           levelReq: parseInt(entry["levelreq"]) || 0,
-        });
+        };
+        const baseStrReq = parseInt(entry.reqstr) || 0;
+        const baseDexReq = parseInt(entry.reqdex) || 0;
+        if (baseStrReq > 0) baseResult.strReq = baseStrReq;
+        if (baseDexReq > 0) baseResult.dexReq = baseDexReq;
+        results.push(baseResult);
         if (results.length >= limit) break;
       }
     }

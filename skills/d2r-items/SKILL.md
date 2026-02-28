@@ -225,6 +225,8 @@ npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/inde
 
 **Result includes** `name`, `code`, `id`, `category`, `baseName`, `levelReq`, `props` (stat summary).
 
+For unique, set, and base results: also includes `strReq`, `dexReq` (omitted when 0). These are base item values — ethereal discount is not applied at search time.
+
 For magic affix results, also includes: `modCode`, `modMin`, `modMax`, `itemTypes[]`, `classSpecific`.
 
 **Examples:**

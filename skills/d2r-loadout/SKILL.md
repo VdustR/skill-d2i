@@ -31,25 +31,100 @@ Build complete character equipment sets for Diablo II: Resurrected. Uses the `d2
 
 ## Loadout Workflow
 
-> "Build me a Necromancer loadout, level 50-60, prefer sets, fill with uniques"
+> "Build me a Necromancer loadout, level 50-60"
 
-**Steps:**
+### Phase 1: Build Identity
 
-1. **Determine constraints** — class, level range, play style, priorities (set > unique, etc.)
-2. **Search for set items first** (if preferred):
-   - `--search --class <class> --quality set --max-level <lvl>`
-   - Identify which sets can be partially or fully equipped
-   - Select the best set combo covering the most slots
-3. **Fill remaining slots with uniques**:
-   - `--search --quality unique --type <slot-type> --max-level <lvl>` per slot
-   - Pick best-in-slot for each remaining slot
-4. **Name the loadout** — derive a short, descriptive English name in kebab-case from the build (e.g., `cold-sorc-endgame`, `natalya-assassin`, `barb-mf`). This name becomes the output folder.
-5. **Present the full loadout** as a table:
-   - Slot | Item Name | Type | Quality | Key Stats | Level Req
-   - Show the loadout name at the top
-6. **Confirm with user** — ask if they want adjustments (including the loadout name)
-7. **Generate all items** — use batch mode (JSON array in spec file). Set each item's `outputPath` to `$TMPDIR/d2r-items/<loadout-name>/<slot>-<item-name>.d2i` (e.g., `$TMPDIR/d2r-items/cold-sorc-endgame/helm-griffons-eye.d2i`). Report the folder path and all output paths.
-8. **Verify required levels** — for level-restricted loadouts, run `--read` on the generated charm `.d2i` files to confirm `requiredLevel` fits the target range. Do **not** rely on D2RuneWizard Hero Editor's "Required Level" display for magic items (it has a known bug). Use proper affix IDs (`magicPrefix`/`magicSuffix`) with `levelreq` within the target range rather than defaulting to `0, 0`.
+Ask the user (via `AskUserQuestion` or conversation):
+
+1. **Class** + **level range**
+2. **Build direction / skill focus** — present known archetypes for the class (e.g., Necromancer: Bone, Summon, Poison, CE) and let the user pick or describe their own
+   - If the user is unsure → offer to **research online** (web search for popular builds at the target level/class), then return with recommendations
+   - This determines: which +skills matter, caster vs melee vs summon, FCR vs IAS breakpoints
+3. **Max block?** — if the build uses a shield, ask whether to pursue 75% max block. This has a large hidden dex cost (see Max Block Dex Cost section). Default: no for casters, ask for melee/hybrids.
+4. **Target difficulty** — Normal / Nightmare / Hell. Affects resistance penalty (0 / -40 / -100) and resistance coverage verification.
+
+### Phase 2: Discovery (subagents preferred)
+
+Prefer dispatching subagents in parallel for speed; fall back to sequential search if subagents are unavailable:
+
+- **Subagent A — Sets**: `--search --quality set --class <class> --max-level <lvl>` — find available sets for the class
+- **Subagent B — Uniques per slot**: run `--search --quality unique --type <slot-type> --max-level <lvl>` for each slot category (helm, armor, boots, gloves, belt, ring, amulet, weapon, shield)
+
+Subagents return raw candidate lists. Main agent does NOT search itself — it focuses on analyzing results.
+
+### Phase 3: Strategy Selection
+
+Present findings and ask the user to choose (via `AskUserQuestion`):
+
+1. **Set core + unique fill** — show which sets are available, how many pieces fit the level range, key set bonuses. User picks a set as core; remaining slots filled with uniques.
+2. **All uniques** — best-in-slot per slot, no set dependency.
+
+### Phase 4: Batch Recommendation & Selective Drill-Down
+
+**Restate build direction** at the start (from Phase 1) to prevent drift.
+
+Main agent evaluates all candidates and presents a **single batch recommendation table** covering all slots:
+
+| Slot | Recommended | Req Lvl | Req Str | Req Dex | Key Stats | Why |
+|------|-------------|---------|---------|---------|-----------|-----|
+| Helm | Harlequin Crest | 62 | 50 | — | +2 Skills, DR 10% | BiS for caster |
+| Boots | Sandstorm Trek | 64 | 91 | — | +Str/Vit | ⚠️ Str may be tight |
+| ... | ... | ... | ... | ... | ... | ... |
+
+**Selection criteria per slot:**
+
+1. **Class restriction** — class-specific items must match target class
+2. **Stat budget** — run the Stat Budget Verification algorithm (including max block dex if applicable). If ❌ NOT FEASIBLE, run auto-fix before presenting to user. If ⚠️ TIGHT, note it in the table. Include a stat budget summary below the table
+3. **Build synergy** — prioritize stats that match Phase 1 direction (+skills, FCR, etc.)
+4. **Level requirement** — must fit target level range (including socketed item requirements)
+5. **No duplicate uniques** — the same unique item cannot appear in two slots (e.g., dual Stone of Jordan is not legit). If a unique is recommended for two slots, replace one with the next-best alternative
+6. **Resistance coverage** — sum all +resistance from the loadout and compare against the difficulty penalty. Flag ⚠️ if any element is negative after penalty (see Resistance Coverage Check)
+7. **Breakpoint check** — sum FCR/FHR/IAS from items and identify the nearest breakpoints. Flag if 1-5 points short of a beneficial breakpoint — swapping one item might be worthwhile (see Breakpoint Awareness)
+
+**Phase 4 Gate** — all must pass before presenting the table:
+
+1. [ ] Class restriction — no wrong-class items
+2. [ ] No duplicate uniques across slots
+3. [ ] All items within level range
+4. [ ] Stat budget ✅/⚠️/❌ (with max block if applicable)
+5. [ ] Resistance coverage ✅/⚠️/❌
+6. [ ] Breakpoint gaps flagged (≤5 from next)
+7. [ ] Auto-fix applied if ❌ NOT FEASIBLE on stat budget. If ❌ Dangerous on resistance, flag with swap recommendations (see Resistance Coverage Check) — do not auto-replace items for resistance, present options to user
+
+**User reviews the batch table**, then:
+- **Approve all** → proceed to Phase 5
+- **Contest specific slots** → main agent expands those slots into a comparison table (2-4 candidates with trade-offs), user picks, then proceed
+
+**Verification summaries** (include below the table):
+```
+**Stat Budget**: <Class> Lv<N> | Base str=<X>, dex=<Y> | Budget=<(N-1)*5> pts
+Str invested: <A> | Dex invested: <B> (includes max block: <C>) | Total: <A+B>/<budget> | Remaining for vit: <budget-A-B>
+Verdict: ✅ OK / ⚠️ TIGHT / ❌ NOT FEASIBLE
+
+**Resistance** (<difficulty>, <penalty>): Fire +<X> | Cold +<Y> | Ltng +<Z> | Poison +<W>
+Verdict: ✅ Adequate / ⚠️ Gaps / ❌ Dangerous
+
+**Breakpoints**: FCR <current>/<next> | FHR <current>/<next> | IAS <current>/<next>
+```
+
+### Phase 5: Confirm & Generate
+
+1. **Name the loadout** — derive a short, descriptive English name in kebab-case from the build (e.g., `bone-necro-50`, `natalya-assassin`, `cold-sorc-endgame`). This name becomes the output folder.
+2. **Present final loadout table**: Slot | Item | Quality | Req Lvl | Req Str | Req Dex | Key Stats
+3. **Confirm with user** — including the loadout name
+4. **Generate all items** — use batch mode (JSON array in spec file). Set each item's `outputPath` to `$TMPDIR/d2r-items/<loadout-name>/<slot>-<item-name>.d2i` (e.g., `$TMPDIR/d2r-items/bone-necro-50/helm-harlequin-crest.d2i`). Report the folder path and all output paths.
+5. **Verify required levels** — run `--read` on the generated `.d2i` files to confirm `requiredLevel` fits the target range (this includes socketed items). Do **not** rely on D2RuneWizard Hero Editor's "Required Level" display for magic items (it has a known bug). Use proper affix IDs (`magicPrefix`/`magicSuffix`) with `levelreq` within the target range rather than defaulting to `0, 0`.
+6. **Verify stat requirements** — run `--read` to confirm `requiredStr`/`requiredDex` from generated files. Re-run the stat budget algorithm on the final loadout. Report the stat budget summary and verdict. If the verdict changed (e.g., due to socketFill adding items with level requirements), run auto-fix.
+
+**Phase 5 Gate** — all must pass before declaring the loadout complete:
+
+1. [ ] `--read` confirms `requiredLevel` within target range for every item
+2. [ ] `--read` confirms `requiredStr`/`requiredDex` match expectations
+3. [ ] Stat budget re-verified with actual generated values (verdict unchanged or improved)
+4. [ ] Resistance coverage re-verified after socketFill (verdict unchanged or improved)
+5. [ ] Breakpoint gaps re-checked after socketFill (IAS/resist runes may shift totals)
+6. [ ] All verification summaries (stat budget + resistance + breakpoints) included in output
 
 ## Weapon Slot Rules
 
@@ -89,6 +164,139 @@ Sunder Charms break monster immunity. Variants: original, Latent (internal name:
 | Magic | Black Cleft |
 | Physical | Bone Break |
 
+## Stat Budget Verification
+
+When recommending items, verify that the character can meet all str/dex requirements at the target level.
+
+### Starting Stats
+
+| Class | Base Str | Base Dex |
+|-------|----------|----------|
+| Amazon | 20 | 25 |
+| Assassin | 20 | 20 |
+| Barbarian | 30 | 20 |
+| Druid | 15 | 20 |
+| Necromancer | 15 | 25 |
+| Paladin | 25 | 20 |
+| Sorceress | 10 | 25 |
+| Warlock | 15 | 20 |
+
+### Stat Budget Formula
+
+- **Budget** = `(level - 1) * 5` stat points total
+- No quest bonuses assumed (conservative). Note: Lam Esen's Tome grants +5 stat points per difficulty — if the user confirms quest completion, add 5/10/15 accordingly
+- **Ethereal discount**: ethereal items reduce str/dex requirement by 10 each (minimum 0). The `--read` output already accounts for this; for `--search` results (which show base item values), apply the -10 manually when the loadout includes ethereal items
+
+### Max Block Dex Cost
+
+If the user chose max block (Phase 1 question 3), the shield's `dexReq` is only the **equip threshold** — reaching 75% block requires significantly more dex.
+
+**Formula**: `maxBlockDex = (75 × characterLevel × 2) ÷ blockRating + 15`
+
+Where `blockRating` = shield's base block% + modifiers (e.g., Paladin's Holy Shield adds a large flat bonus). Without Holy Shield, most builds need 200+ dex at high levels.
+
+**Integration with stat budget**: if max block is chosen, after the greedy algorithm computes the equip dex, compare it with the max block dex. Use `max(equipDex, maxBlockDex)` as the final dex investment. This often pushes the verdict from ✅ OK to ⚠️ TIGHT or ❌ NOT FEASIBLE.
+
+**Practical notes**:
+- Paladins with Holy Shield (~Lv20) need far less dex than other classes
+- Without Holy Shield, max block on Spirit Monarch (52% block) at Lv80 needs ~246 dex — extremely expensive
+- If max block makes the budget NOT FEASIBLE, suggest: higher block% shield, or accept lower block
+
+### Greedy Equipping-Order Algorithm
+
+1. Collect all items' `strReq`/`dexReq` (from `--search` results) and `+str`/`+dex` bonuses (stat ID 0 = strength, stat ID 2 = dexterity — from `--resolve-stats` or `props`). **Runewords**: `--search --quality runeword` does not return `strReq`/`dexReq` (they apply to many bases). Use `--search --quality base -q <base-item-name>` or `--read` the generated file to get actual requirements.
+2. Sort items: 0-req items first (rings/amulets/charms — free bonuses), then ascending by `max(strReq, dexReq)`
+3. Simulate equipping in order: for each item, invest str/dex points as needed to meet requirements, then add the item's stat bonuses to current totals. Track `dexFromItemBonuses` = sum of all +dex bonuses granted by equipped items (stat ID 2)
+4. If max block is chosen: `dexInvested = max(dexInvested, maxBlockDex - baseDex - dexFromItemBonuses)` where `maxBlockDex` is from the Max Block Dex Cost formula
+5. `totalInvested = strInvested + dexInvested`; compare against budget `(level - 1) * 5`
+6. Remaining = budget for vit/energy
+
+### Verdict Labels
+
+- `totalInvested <= budget * 0.6` → ✅ OK
+- `totalInvested <= budget` → ⚠️ TIGHT (>60% into str/dex, little left for vit)
+- `totalInvested > budget` → ❌ NOT FEASIBLE
+
+## Auto-Fix for Stat Budget Failures
+
+When the stat budget verdict is ❌ NOT FEASIBLE or ⚠️ TIGHT, the agent must handle as follows:
+
+### ❌ NOT FEASIBLE — Automatic Fix
+
+1. Identify the **most expensive item** by stat investment (the item that caused the largest `strInvested` or `dexInvested` jump in the simulation)
+2. Search for alternatives in the same slot with lower `strReq`/`dexReq`:
+   - Run `--search --quality unique --type <slot-type> --max-level <lvl>` (reuse cached results from Phase 2)
+   - Filter to candidates with `strReq` ≤ current reachable str (before the offending item)
+   - Rank by build synergy (Phase 1 criteria)
+3. Replace the offending item with the best fitting alternative
+4. Re-run the stat budget verification on the updated loadout
+5. Repeat up to 3 iterations if still NOT FEASIBLE — each iteration targets the next most expensive item
+6. If still NOT FEASIBLE after 3 iterations, present the situation to the user with the remaining gap and ask for guidance (e.g., accept more str investment, switch to lighter base items, or adjust the build)
+
+### ⚠️ TIGHT — User Choice
+
+- Present the TIGHT verdict with the stat allocation summary
+- Offer the user a choice: accept (proceed) or auto-fix (attempt to free up stat points)
+- Do NOT silently replace items for TIGHT — only for NOT FEASIBLE
+
+## Resistance Coverage Check
+
+After selecting items, verify that the loadout provides adequate resistance for the target difficulty.
+
+### Difficulty Penalties
+
+| Difficulty | Resistance Penalty |
+|------------|-------------------|
+| Normal | 0 |
+| Nightmare | -40 |
+| Hell | -100 |
+
+### Verification Algorithm
+
+1. For each element (Fire, Cold, Lightning, Poison), sum all `+res` from the loadout:
+   - Item props: look for `res-fire`, `res-cold`, `res-ltng`, `res-pois`, `res-all` in `--search` results or `--resolve-stats` output
+   - Stat IDs: 39 (fire), 43 (cold), 41 (lightning), 45 (poison) for flat res; 36-38/40/42/44 for max res
+   - Set bonuses and runeword stats contribute too
+2. Apply the difficulty penalty: `netRes = sumRes + penalty`
+3. Quest bonus (conservative: excluded): Anya's scroll gives +10 all res per difficulty completed. If user confirms, add 10/20/30.
+
+### Verdict
+
+- All elements ≥ 40 → ✅ Adequate
+- Any element 0–39 → ⚠️ Gaps (list which elements are low)
+- Any element < 0 → ❌ Dangerous — recommend resistance-focused item swaps or `socketFill: "resist"`
+
+Include a resistance summary below the stat budget summary:
+```
+**Resistance** (Hell, -100): Fire +42 | Cold +75 | Ltng +55 | Poison +30 ⚠️
+```
+
+## Breakpoint Awareness
+
+FCR, FHR, and IAS use breakpoint tables — accumulating points only matters when you cross a threshold. Being 1 point short of a breakpoint wastes all other FCR/FHR/IAS investment.
+
+### Verification
+
+1. Sum the relevant stat from all items in the loadout:
+   - FCR: stat ID 105 (`fcr` in props)
+   - FHR: stat ID 99 (`fhr` in props)
+   - IAS: stat ID 93 (`ias` in props)
+2. Look up the class-specific breakpoint table (these vary by class and sometimes by skill/form — e.g., Werewolf Druid has different FCR breakpoints than human form). If exact breakpoints are unknown, research online for the class + build.
+3. Identify the current breakpoint and the next one.
+4. If within 5 points of the next breakpoint, flag it: `⚠️ FCR 60/63 — 3 short of next breakpoint (63)`
+
+### When to Swap
+
+If a breakpoint gap is ≤ 5 and an alternative item in any slot provides the missing points without losing critical stats, recommend the swap. Breakpoint gains (especially FCR for casters, IAS for melee) often outweigh raw stat differences.
+
+### Common Breakpoint References
+
+Breakpoint tables vary by class, form, and patch version. **Do not hardcode values from memory** — always verify by searching online (e.g., "D2R <class> FCR breakpoints") or checking community resources. Key notes:
+- Sorceress and Paladin have the most FCR-dependent builds
+- Assassin Burst of Speed affects IAS breakpoints
+- Druid shapeshift forms have separate FCR/FHR tables
+- Warlock: verify breakpoints from current patch notes (new class, may change between patches)
+
 ## Tips
 
 - Consider synergy between items (e.g., +skills for the class, resistance coverage)
@@ -99,6 +307,19 @@ Sunder Charms break monster immunity. Variants: original, Latent (internal name:
 - Use `statOverrides` when auto-resolved stats need correction (e.g., Hellfire Torch class)
 - **Terminology**: when the user uses non-English gaming terms, verify the item mapping before selecting — see `d2r-items` skill "Terminology & Translation" section and `references/zh-tw-terms.md`
 - **Data freshness**: the CLI data source may not cover the latest patches — see `d2r-items` skill "Data Source & Limitations" section
+- **Skills drive gear** — always determine build direction before selecting items
+- **Batch recommend, selective drill-down** — present all slots at once; only expand contested slots interactively
+- **Equipment bonuses matter** — items with +str/+dex (e.g., Annihilus, +str rings) reduce total stat investment; always account for the full loadout in the greedy equipping-order algorithm
+- **Ethereal discount** — ethereal items need 10 less str/dex; note this in recommendations
+- **Caster builds** — typically minimal str (just enough for gear), minimal dex (0 unless max block); default to no max block
+- **Melee builds** — more flexible with str/dex, but still verify budget; max block is common for melee + shield
+- **Quest bonuses** — conservative estimate excludes quest rewards; mention Lam Esen's Tome (+5 stat points per difficulty) and Anya's scroll (+10 all res per difficulty) if budget/resistance is tight
+- **Duplicate uniques** — never recommend the same unique item in two slots; use the next-best alternative for the second slot
+- **Breakpoint near-miss** — if swapping one item gains a breakpoint, present the trade-off to the user even if raw stats are slightly worse
+- **Class restriction check** — verify class-specific items match target class before recommending
+- **Socketed item level requirements** — `--read` includes socketed items in `requiredLevel`; use for verification
+- **Subagents search, main agent decides** — keep strategy reasoning centralized; fall back to sequential search if subagents are unavailable
+- **Restate build direction** — at Phase 4 start, re-anchor the build focus to prevent mid-flow drift
 
 ## CLI Reference
 
@@ -109,8 +330,10 @@ Key commands for loadout building:
 | Command | Purpose |
 |---------|---------|
 | `--search --class <c> --quality set` | Find class set items |
-| `--search --quality unique --type <t>` | Find unique items by slot type |
+| `--search --quality unique --type <t>` | Find unique items by slot type; results include `strReq`/`dexReq` |
+| `--search --quality unique --type <t> --max-level <n>` | Find unique items by slot type within level range |
 | `--search --quality magic-prefix -c <c>` | Find class-specific magic prefixes |
 | `--lookup "<name>"` | Get item code and ID |
 | `--resolve-stats --quality <q> --id <n>` | Preview auto-resolved stats |
 | `--file /tmp/d2r-spec.json` | Generate items (single or batch array) |
+| `--read <file.d2i>` | Read a generated `.d2i` file and verify `requiredLevel`, `requiredStr`, `requiredDex` |
