@@ -82,7 +82,17 @@ function parseSpec(args: string[]): ItemSpec | ItemSpec[] {
 
 function resolveOutputPath(spec: ItemSpec): string {
   if (spec.outputPath) {
-    const resolved = path.resolve(spec.outputPath);
+    let p = spec.outputPath;
+    if (p === "~") {
+      p = os.homedir();
+    } else if (p.startsWith("~/")) {
+      p = path.join(os.homedir(), p.slice(2));
+    }
+    p = p.replace(/\$\{(\w+)\}|\$(\w+)/g, (_, g1, g2) => {
+      const key = g1 || g2;
+      return process.env[key] ?? "";
+    });
+    const resolved = path.resolve(p);
     if (!resolved.endsWith(".d2i")) {
       fatal("outputPath must end with .d2i", "INVALID_OUTPUT_PATH");
     }
@@ -233,7 +243,15 @@ async function generateOne(
     if (spec.runewordId != null) {
       const rwName = (constants.runewords[spec.runewordId] as any)?.n;
       if (rwName) {
-        const rw = resolveRuneword(rwName, constants);
+        const isWeaponBase = !!(constants.weapon_items as Record<string, unknown>)[trimmed];
+        const armorEntry = (constants.armor_items as Record<string, any>)[trimmed];
+        const cats: string[] = armorEntry?.c || [];
+        const isShieldBase = cats.some((c: string) => c.toLowerCase().includes("shield"));
+        const isHelmBase = cats.some((c: string) =>
+          c.toLowerCase().includes("helm") || c.toLowerCase().includes("pelt") || c.toLowerCase().includes("primal"),
+        );
+        const itemTypeCtx = isWeaponBase ? "weapon" as const : isShieldBase ? "shield" as const : isHelmBase ? "helm" as const : "armor" as const;
+        const rw = resolveRuneword(rwName, constants, itemTypeCtx);
         if (rw) {
           if (!spec.socketedItems || spec.socketedItems.length === 0) {
             spec.socketedItems = rw.runes.map((code) => ({ itemCode: code }));
@@ -457,6 +475,29 @@ async function main() {
       return;
     }
 
+    case "--lookup-skill": {
+      ensureCached();
+      const query = args.slice(1).join(" ").toLowerCase();
+      if (!query) fatal("Missing query after --lookup-skill", "MISSING_ARG");
+      const skills = loadData("skills.json");
+      const results: Array<{ id: number; skill: string; charclass: string }> = [];
+      for (const [, entry] of Object.entries(skills) as [string, any][]) {
+        if (entry?.skill && entry["*Id"] != null) {
+          if (entry.skill.toLowerCase().includes(query)) {
+            results.push({
+              id: parseInt(entry["*Id"]),
+              skill: entry.skill,
+              charclass: entry.charclass || "",
+            });
+          }
+        }
+      }
+      process.stdout.write(
+        JSON.stringify({ success: true, query, count: results.length, results }) + "\n"
+      );
+      return;
+    }
+
     case "--search": {
       ensureCached();
       const filters = parseSearchArgs(args.slice(1));
@@ -470,26 +511,50 @@ async function main() {
     case "--resolve-stats": {
       ensureCached();
       const rsArgs = parseSearchArgs(args.slice(1));
-      const quality = rsArgs.quality as "unique" | "set";
-      if (quality !== "unique" && quality !== "set") {
-        fatal("--resolve-stats requires --quality unique or set", "INVALID_ARG");
+      const quality = rsArgs.quality as "unique" | "set" | "runeword";
+      if (quality !== "unique" && quality !== "set" && quality !== "runeword") {
+        fatal("--resolve-stats requires --quality unique, set, or runeword", "INVALID_ARG");
       }
-      // Accept --id N or extract from search by query
+
       let itemId: number | undefined;
       for (let i = 1; i < args.length; i++) {
         if (args[i] === "--id") { itemId = parseInt(args[++i]); break; }
       }
       if (itemId == null) fatal("--resolve-stats requires --id <numericId>", "MISSING_ARG");
-      const resolved = resolveItem(quality, itemId, constants);
-      process.stdout.write(
-        JSON.stringify({
-          success: true, quality, id: itemId,
-          count: resolved.stats.length, stats: resolved.stats,
-          sockets: resolved.sockets,
-          ...(resolved.ethereal ? { ethereal: true } : {}),
-          ...(resolved.indestructible ? { indestructible: true } : {}),
-        }) + "\n"
-      );
+
+      if (quality === "runeword") {
+        const rwName = (constants.runewords[itemId] as any)?.n;
+        if (!rwName) fatal(`Runeword not found: ${itemId}`, "NOT_FOUND");
+        const validTypes = ["weapon", "helm", "shield", "armor"] as const;
+        // Extract --type separately (parseSearchArgs may miss it after --id value)
+        let typeArg: string | undefined;
+        for (let i = 1; i < args.length; i++) {
+          if (args[i] === "--type" || args[i] === "-t") { typeArg = args[++i]?.toLowerCase(); break; }
+        }
+        const typeCtx = typeArg && validTypes.includes(typeArg as any)
+          ? (typeArg as "weapon" | "helm" | "shield" | "armor")
+          : undefined;
+        const rw = resolveRuneword(rwName, constants, typeCtx);
+        if (!rw) fatal(`Failed to resolve runeword: ${rwName}`, "RESOLVE_ERROR");
+        process.stdout.write(
+          JSON.stringify({
+            success: true, quality, id: itemId, name: rwName,
+            runes: rw.runes, baseTypes: rw.baseTypes,
+            count: rw.stats.length, stats: rw.stats,
+          }) + "\n"
+        );
+      } else {
+        const resolved = resolveItem(quality, itemId, constants);
+        process.stdout.write(
+          JSON.stringify({
+            success: true, quality, id: itemId,
+            count: resolved.stats.length, stats: resolved.stats,
+            sockets: resolved.sockets,
+            ...(resolved.ethereal ? { ethereal: true } : {}),
+            ...(resolved.indestructible ? { indestructible: true } : {}),
+          }) + "\n"
+        );
+      }
       return;
     }
 
@@ -641,7 +706,7 @@ async function main() {
     default: {
       // Generate mode
       // Extract --format flag before parsing spec
-      let format: D2iFormat = "d2";
+      let format: D2iFormat = "raw";
       const genArgs = [...args];
       const fmtIdx = genArgs.indexOf("--format");
       if (fmtIdx !== -1) {

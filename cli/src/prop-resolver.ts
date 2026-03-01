@@ -326,6 +326,7 @@ function resolveParamValue(par: any, skillNameMap: Record<string, number>): numb
 export function resolveRuneword(
   runewordName: string,
   constants: IConstantData,
+  itemTypeContext?: "weapon" | "helm" | "shield" | "armor",
 ): ResolvedRuneword | null {
   const runesData = loadData("runes.json");
 
@@ -373,6 +374,31 @@ export function resolveRuneword(
 
     const resolved = resolveProperty(propDef, par, min, max, statIdMap, constants);
     stats.push(...resolved);
+  }
+
+  // Resolve individual rune-in-socket bonuses from gems.json
+  if (itemTypeContext) {
+    const gemsData = loadData("gems.json") as Record<string, any>;
+    // gems.json uses helmMod for both helm and body armor categories
+    const modPrefix = itemTypeContext === "armor" ? "helm" : itemTypeContext;
+
+    for (const runeCode of runes) {
+      const runeEntry = gemsData[runeCode];
+      if (!runeEntry) continue;
+
+      for (let i = 1; i <= 3; i++) {
+        const propCode = runeEntry[`${modPrefix}Mod${i}Code`];
+        if (!propCode || propCode === "") continue;
+        const par = runeEntry[`${modPrefix}Mod${i}Param`];
+        const min = parseInt(runeEntry[`${modPrefix}Mod${i}Min`]) || 0;
+        const max = parseInt(runeEntry[`${modPrefix}Mod${i}Max`]) || 0;
+
+        const propDef = propMap[propCode];
+        if (!propDef) continue;
+        const resolved = resolveProperty(propDef, par, min, max, statIdMap, constants);
+        stats.push(...resolved);
+      }
+    }
   }
 
   return { runes, stats, baseTypes };

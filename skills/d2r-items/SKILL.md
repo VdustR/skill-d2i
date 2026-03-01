@@ -46,14 +46,14 @@ This downloads the full d2data repository (tarball) to `~/.cache/game-d2i-skills
 
 ## Output Format
 
-Before generating items, ask the user which tool they will use to import the `.d2i` file:
+The default output format is `"raw"` (for D2RuneWizard Hero Editor). If the user needs a different tool, set `format` in ItemSpec JSON:
 
 | Tool | Format | Description |
 |------|--------|-------------|
-| [D2RuneWizard Hero Editor](https://d2runewizard.com/hero-editor) | `"raw"` | Raw item bytes only (no container header) |
+| [D2RuneWizard Hero Editor](https://d2runewizard.com/hero-editor) | `"raw"` (default) | Raw item bytes only (no container header) |
 | Other / General | `"d2"` | Standard D2I container: `JM` header + uint16 count + item bytes |
 
-Set the `format` field in ItemSpec JSON accordingly. Once the user answers, remember their choice for the rest of the session — do not ask again.
+Once the user specifies a format, remember their choice for the rest of the session.
 
 ## Legitimacy Classification
 
@@ -248,16 +248,37 @@ For magic affix results, also includes: `modCode`, `modMin`, `modMax`, `itemType
 --search --quality magic-suffix -q "fortune"
 ```
 
-### --resolve-stats --quality unique|set --id \<numericId\>
+### --resolve-stats --quality unique|set|runeword --id \<numericId\> [--type weapon|helm|shield|armor]
 
 Preview the auto-resolved stats for an item (useful for debugging):
 
 ```bash
+# Unique/set items
 npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/index.ts" --resolve-stats --quality set --id 80
+
+# Runeword (T1Code properties only)
+npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/index.ts" --resolve-stats --quality runeword --id 155
+
+# Runeword with rune-in-socket bonuses (--type specifies base item category)
+npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/index.ts" --resolve-stats --quality runeword --id 155 --type shield
 ```
 
 ```json
 {"success":true,"quality":"set","id":80,"count":9,"stats":[{"id":9,"values":[30]},{"id":7,"values":[60]},...]}
+```
+
+For runewords, the output includes `name`, `runes`, and `baseTypes` fields. The optional `--type` flag adds individual rune socket bonuses from gems.json (e.g., Spirit Shield +35 cold/lightning/poison resist).
+
+### --lookup-skill \<query\>
+
+Search for skill names and their numeric IDs (requires `--setup`):
+
+```bash
+npx --prefix "${CLAUDE_PLUGIN_ROOT}/cli" tsx "${CLAUDE_PLUGIN_ROOT}/cli/src/index.ts" --lookup-skill blizzard
+```
+
+```json
+{"success":true,"query":"blizzard","count":3,"results":[{"id":59,"skill":"Blizzard","charclass":"sor"},...]}
 ```
 
 ### --file \<spec.json\> [--format d2|raw]
@@ -321,7 +342,7 @@ When `outputPath` is set per item in the spec array, each item is written to tha
   "currentDurability": 40,     // current durability
   "quantity": 0,               // stackable items
   "outputPath": "",             // optional custom path
-  "format": "raw"              // "d2" (default, JM container) | "raw" (for D2RuneWizard Hero Editor)
+  "format": "raw"              // "raw" (default, for D2RuneWizard Hero Editor) | "d2" (JM container)
 }
 ```
 

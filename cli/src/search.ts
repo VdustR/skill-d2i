@@ -74,9 +74,30 @@ function matchesClass(categories: string[] | undefined, className: string): bool
   return categories.some((c) => c.toLowerCase().includes(cl));
 }
 
+const typeAliases: Record<string, { terms: string[]; exact?: boolean }> = {
+  "body-armor": { terms: ["armor"], exact: true },
+  "body": { terms: ["armor"], exact: true },
+  "helm": { terms: ["helm", "pelt", "primal"] },
+  "shield": { terms: ["any shield", "shield", "auric"] },
+  "gloves": { terms: ["gloves"] },
+  "boots": { terms: ["boots"] },
+  "belt": { terms: ["belt"] },
+};
+
 function matchesType(categories: string[] | undefined, typeName: string): boolean {
   if (!categories) return false;
   const t = typeName.toLowerCase();
+
+  const alias = typeAliases[t];
+  if (alias) {
+    return categories.some((c) => {
+      const cl = c.toLowerCase();
+      return alias.exact
+        ? alias.terms.some((a) => cl === a)
+        : alias.terms.some((a) => cl.includes(a));
+    });
+  }
+
   return categories.some((c) => c.toLowerCase().includes(t));
 }
 

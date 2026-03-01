@@ -495,6 +495,9 @@ Key commands for loadout building:
 | `--search --quality unique --type <t> --max-level <n>` | Find unique items by slot type within level range |
 | `--search --quality magic-prefix -c <c>` | Find class-specific magic prefixes |
 | `--lookup "<name>"` | Get item code and ID |
-| `--resolve-stats --quality <q> --id <n>` | Preview auto-resolved stats |
+| `--resolve-stats --quality <q> --id <n>` | Preview auto-resolved stats (supports unique, set, runeword) |
+| `--resolve-stats --quality runeword --id <n> --type <t>` | Runeword stats with rune-in-socket bonuses (weapon/helm/shield/armor) |
+| `--lookup-skill "<name>"` | Search skill names and get numeric IDs |
+| `--search --quality unique --type body-armor` | Search body armor only (excludes helms/shields/boots) |
 | `--file /tmp/d2r-spec.json` | Generate items (single or batch array) |
 | `--read <file.d2i>` | Read a generated `.d2i` file and verify `requiredLevel`, `requiredStr`, `requiredDex` |
